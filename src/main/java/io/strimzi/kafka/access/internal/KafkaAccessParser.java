@@ -11,6 +11,7 @@ import io.javaoperatorsdk.operator.processing.event.ResourceID;
 import io.strimzi.api.kafka.model.Kafka;
 import io.strimzi.api.kafka.model.KafkaBuilder;
 import io.strimzi.api.kafka.model.KafkaUser;
+import io.strimzi.api.kafka.model.status.KafkaUserStatus;
 import io.strimzi.kafka.access.model.KafkaAccess;
 import io.strimzi.kafka.access.model.KafkaAccessSpec;
 import io.strimzi.kafka.access.model.KafkaUserReference;
@@ -64,6 +65,7 @@ public class KafkaAccessParser {
      * @return                   Set of ResourceIDs for the KafkaAccess objects that reference the Kafka resource
      */
     public static Set<ResourceID> kafkaSecondaryToPrimaryMapper(final Stream<KafkaAccess> kafkaAccessList, final Kafka kafka) {
+        LOGGER.info("kafkaSecondaryToPrimaryMapper for kafka {}", kafka.getMetadata().getName());
         final Optional<String> kafkaName = Optional.ofNullable(kafka.getMetadata()).map(ObjectMeta::getName);
         final Optional<String> kafkaNamespace = Optional.ofNullable(kafka.getMetadata()).map(ObjectMeta::getNamespace);
         if (kafkaName.isEmpty() || kafkaNamespace.isEmpty()) {
@@ -89,6 +91,7 @@ public class KafkaAccessParser {
      * @return                   Set of ResourceIDs for the KafkaAccess objects that reference the KafkaUser resource
      */
     public static Set<ResourceID> kafkaUserSecondaryToPrimaryMapper(final Stream<KafkaAccess> kafkaAccessList, final KafkaUser kafkaUser) {
+        LOGGER.info("kafkaUserSecondaryToPrimaryMapper for kafkaUser {}", kafkaUser.getMetadata().getName());
         final Optional<String> kafkaUserName = Optional.ofNullable(kafkaUser.getMetadata()).map(ObjectMeta::getName);
         final Optional<String> kafkaUserNamespace = Optional.ofNullable(kafkaUser.getMetadata()).map(ObjectMeta::getNamespace);
         if (kafkaUserName.isEmpty() || kafkaUserNamespace.isEmpty()) {
@@ -132,6 +135,7 @@ public class KafkaAccessParser {
      * @return                   Set of ResourceIDs for the KafkaAccess objects that reference the Kafka resource
      */
     public static Set<ResourceID> secretSecondaryToPrimaryMapper(final Stream<KafkaAccess> kafkaAccessList, final Secret secret) {
+        LOGGER.info("secretSecondaryToPrimaryMapper for secret {}", secret.getMetadata().getName());
         final Set<ResourceID> resourceIDS = new HashSet<>();
 
         final Optional<String> secretNamespace = Optional.ofNullable(secret.getMetadata())
@@ -181,6 +185,7 @@ public class KafkaAccessParser {
      * @return               Set of ResourceIDs containing the KafkaUser that is referenced by the KafkaAccess
      */
     public static Set<ResourceID> kafkaUserPrimaryToSecondaryMapper(final KafkaAccess kafkaAccess) {
+        LOGGER.info("kafkaUserPrimaryToSecondaryMapper for kafkaAccess {}", kafkaAccess.getMetadata().getName());
         final Set<ResourceID> resourceIDS = new HashSet<>();
         Optional.ofNullable(kafkaAccess.getSpec())
                 .map(KafkaAccessSpec::getUser)
@@ -190,6 +195,31 @@ public class KafkaAccessParser {
                             .orElseGet(() -> Optional.ofNullable(kafkaAccess.getMetadata()).map(ObjectMeta::getNamespace).orElse(null));
                     if (name == null || namespace == null) {
                         LOGGER.error("Found KafkaUser for KafkaAccess instance, but metadata is missing.");
+                    } else {
+                        resourceIDS.add(new ResourceID(name, namespace));
+                    }
+                });
+        return resourceIDS;
+    }
+
+    /**
+     * Finds the Secret that is related to the KafkaUser referenced by this KafkaAccess object.
+     *
+     * @param kafkaUser    KafkaUser object to parse
+     *
+     * @return             Set of ResourceIDs containing the Secret that is related to the KafkaUser referenced by the KafkaAccess
+     */
+    public static Set<ResourceID> kafkaUserSecretPrimaryToSecondaryMapper(final KafkaUser kafkaUser) {
+        LOGGER.info("kafkaUserSecretPrimaryToSecondaryMapper for kafkaUser {}", kafkaUser.getMetadata().getName());
+        final Set<ResourceID> resourceIDS = new HashSet<>();
+        Optional.ofNullable(kafkaUser.getStatus())
+                .map(KafkaUserStatus::getSecret)
+                .ifPresent(name -> {
+                    String namespace = Optional.ofNullable(kafkaUser.getMetadata())
+                            .map(ObjectMeta::getNamespace)
+                            .orElse(null);
+                    if (namespace == null) {
+                        LOGGER.error("Mapping KafkaUser secret for KafkaAccess instance, but KafkaUser metadata is missing.");
                     } else {
                         resourceIDS.add(new ResourceID(name, namespace));
                     }

@@ -15,6 +15,7 @@ import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceInitializer;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
+import io.javaoperatorsdk.operator.processing.event.ResourceID;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
 import io.strimzi.api.kafka.Crds;
@@ -40,6 +41,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 
@@ -212,6 +214,19 @@ public class KafkaAccessReconciler implements Reconciler<KafkaAccess>, EventSour
                 InformerConfiguration.from(Secret.class)
                         .withLabelSelector(String.format("%s=%s", KafkaAccessParser.MANAGED_BY_LABEL_KEY, KafkaAccessParser.STRIMZI_CLUSTER_LABEL_VALUE))
                         .withSecondaryToPrimaryMapper(secret -> KafkaAccessParser.secretSecondaryToPrimaryMapper(context.getPrimaryCache().list(), secret))
+                        .withPrimaryToSecondaryMapper(kafkaAccess -> {
+                            Optional<ResourceID> kafkaUserResourceID = KafkaAccessParser.kafkaUserPrimaryToSecondaryMapper((KafkaAccess) kafkaAccess)
+                                    .stream()
+                                    .findFirst();
+                            if (kafkaUserResourceID.isPresent()) {
+                                KafkaUser kafkaUser = getKafkaUser(kafkaUserResourceID.get().getName(),
+                                        kafkaUserResourceID.get().getNamespace().orElse(kafkaAccess.getMetadata().getNamespace())
+                                );
+                                return KafkaAccessParser.kafkaUserSecretPrimaryToSecondaryMapper(kafkaUser);
+                            } else {
+                                return new HashSet<>();
+                            }
+                        })
                         .build(),
                 context);
         InformerEventSource<Secret, KafkaAccess> kafkaAccessSecretEventSource = new InformerEventSource<>(
