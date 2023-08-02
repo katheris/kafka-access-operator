@@ -194,6 +194,30 @@ public class KafkaAccessParser {
     }
 
     /**
+     * Finds the Kafka that is referenced by this KafkaAccess object.
+     *
+     * @param kafkaAccess    KafkaAccess object to parse
+     *
+     * @return               Set of ResourceIDs containing the Kafka that is referenced by the KafkaAccess
+     */
+    public static Set<ResourceID> kafkaPrimaryToSecondaryMapper(final KafkaAccess kafkaAccess) {
+        final Set<ResourceID> resourceIDS = new HashSet<>();
+        Optional.ofNullable(kafkaAccess.getSpec())
+                .map(KafkaAccessSpec::getKafka)
+                .ifPresent(kafkaReference -> {
+                    String name = kafkaReference.getName();
+                    String namespace = Optional.ofNullable(kafkaReference.getNamespace())
+                            .orElseGet(() -> Optional.ofNullable(kafkaAccess.getMetadata()).map(ObjectMeta::getNamespace).orElse(null));
+                    if (name == null || namespace == null) {
+                        LOGGER.error("Found Kafka for KafkaAccess instance, but metadata is missing.");
+                    } else {
+                        resourceIDS.add(new ResourceID(name, namespace));
+                    }
+                });
+        return resourceIDS;
+    }
+
+    /**
      * Finds the KafkaUser that is referenced by this KafkaAccess object.
      *
      * @param kafkaAccess    KafkaAccess object to parse

@@ -257,6 +257,30 @@ public class KafkaAccessParserTest {
     }
 
     @Test
+    @DisplayName("When kafkaPrimaryToSecondaryMapper() is called with a KafkaAccess that references a Kafka, " +
+            "then the returned set includes the Kafka")
+    void testKafkaPrimaryToSecondaryMapper() {
+        final KafkaReference kafkaReference = ResourceProvider.getKafkaReference(KAFKA_NAME_1, NAMESPACE_1);
+        final KafkaAccess kafkaAccess = ResourceProvider.getKafkaAccess(ACCESS_NAME_1, NAMESPACE_1, kafkaReference);
+
+        final Set<ResourceID> matches = KafkaAccessParser.kafkaPrimaryToSecondaryMapper(kafkaAccess);
+        assertThat(matches).hasSize(1);
+        assertThat(matches).containsExactly(new ResourceID(KAFKA_NAME_1, NAMESPACE_1));
+    }
+
+    @Test
+    @DisplayName("When kafkaUserPrimaryToSecondaryMapper() is called with a KafkaAccess that references a Kafka but no namespace, " +
+            "then the returned set includes the Kafka with the namespace of the KafkaAccess")
+    void testKafkaPrimaryToSecondaryMapperMissingNamespace() {
+        final KafkaReference kafkaReference = ResourceProvider.getKafkaReference(KAFKA_NAME_1, null);
+        final KafkaAccess kafkaAccess = ResourceProvider.getKafkaAccess(ACCESS_NAME_1, NAMESPACE_1, kafkaReference);
+
+        final Set<ResourceID> matches = KafkaAccessParser.kafkaPrimaryToSecondaryMapper(kafkaAccess);
+        assertThat(matches).hasSize(1);
+        assertThat(matches).containsExactly(new ResourceID(KAFKA_NAME_1, NAMESPACE_1));
+    }
+
+    @Test
     @DisplayName("When kafkaUserPrimaryToSecondaryMapper() is called with a KafkaAccess that does not reference a KafkaUser, " +
             "then an empty set is returned")
     void testKafkaAccessWithMissingKafkaUser() {
