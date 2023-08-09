@@ -6,6 +6,7 @@ package io.strimzi.kafka.access;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.server.mock.EnableKubernetesMockClient;
+import io.javaoperatorsdk.operator.Operator;
 import io.strimzi.api.kafka.Crds;
 import io.strimzi.api.kafka.model.Kafka;
 import io.strimzi.api.kafka.model.KafkaUser;
@@ -16,6 +17,8 @@ import io.strimzi.kafka.access.model.KafkaAccess;
 import io.strimzi.kafka.access.model.KafkaReference;
 import io.strimzi.kafka.access.model.KafkaUserReference;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -26,6 +29,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,6 +49,21 @@ public class SecretDataTest {
     private static final int BOOTSTRAP_PORT_9093 = 9093;
 
     KubernetesClient client;
+    Operator operator;
+    KafkaAccessReconciler reconciler;
+
+    @BeforeEach
+    void beforeEach() {
+        operator = new Operator(client);
+        reconciler = new KafkaAccessReconciler(client);
+        operator.register(reconciler);
+        operator.start();
+    }
+
+    @AfterEach
+    void afterEach() {
+        operator.stop();
+    }
 
     @Test
     @DisplayName("When secretData is called with a KafkaAccess resource, then the data returned includes the " +
@@ -61,7 +80,7 @@ public class SecretDataTest {
         final KafkaReference kafkaReference = ResourceProvider.getKafkaReference(KAFKA_NAME, KAFKA_NAMESPACE);
         final KafkaAccess kafkaAccess = ResourceProvider.getKafkaAccess(NAME, NAMESPACE, kafkaReference);
 
-        Map<String, String> data = new KafkaAccessReconciler(client).secretData(kafkaAccess.getSpec(), NAMESPACE);
+        Map<String, String> data = reconciler.secretData(kafkaAccess.getSpec(), NAMESPACE);
         final Base64.Encoder encoder = Base64.getEncoder();
         final Map<String, String> expectedDataEntries = new HashMap<>();
         expectedDataEntries.put("type", encoder.encodeToString("kafka".getBytes(StandardCharsets.UTF_8)));
@@ -90,7 +109,7 @@ public class SecretDataTest {
         final KafkaUserReference kafkaUserReference = ResourceProvider.getKafkaUserReference(KAFKA_NAME, KAFKA_NAMESPACE);
         final KafkaAccess kafkaAccess = ResourceProvider.getKafkaAccess(NAME, NAMESPACE, kafkaReference, kafkaUserReference);
 
-        Map<String, String> data = new KafkaAccessReconciler(client).secretData(kafkaAccess.getSpec(), NAMESPACE);
+        Map<String, String> data = reconciler.secretData(kafkaAccess.getSpec(), NAMESPACE);
         final Base64.Encoder encoder = Base64.getEncoder();
         assertThat(data).containsEntry(
                 CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
@@ -105,7 +124,7 @@ public class SecretDataTest {
         final KafkaReference kafkaReference = ResourceProvider.getKafkaReference(KAFKA_NAME, KAFKA_NAMESPACE);
         final KafkaAccess kafkaAccess = ResourceProvider.getKafkaAccess(NAME, NAMESPACE, kafkaReference);
 
-        assertThrows(IllegalStateException.class, () -> new KafkaAccessReconciler(client).secretData(kafkaAccess.getSpec(), NAMESPACE));
+        assertThrows(NoSuchElementException.class, () -> reconciler.secretData(kafkaAccess.getSpec(), NAMESPACE));
     }
 
     @Test
@@ -130,7 +149,7 @@ public class SecretDataTest {
         final KafkaUserReference kafkaUserReference = ResourceProvider.getKafkaUserReference(KAFKA_NAME, KAFKA_NAMESPACE);
         final KafkaAccess kafkaAccess = ResourceProvider.getKafkaAccess(NAME, NAMESPACE, kafkaReference, kafkaUserReference);
 
-        assertThrows(IllegalStateException.class, () -> new KafkaAccessReconciler(client).secretData(kafkaAccess.getSpec(), NAMESPACE));
+        assertThrows(NoSuchElementException.class, () -> reconciler.secretData(kafkaAccess.getSpec(), NAMESPACE));
     }
 
     private static Stream<KafkaUserReference> userReferences() {
@@ -165,6 +184,6 @@ public class SecretDataTest {
         final KafkaReference kafkaReference = ResourceProvider.getKafkaReference(KAFKA_NAME, KAFKA_NAMESPACE);
         final KafkaAccess kafkaAccess = ResourceProvider.getKafkaAccess(NAME, NAMESPACE, kafkaReference, userReference);
 
-        assertThrows(IllegalStateException.class, () -> new KafkaAccessReconciler(client).secretData(kafkaAccess.getSpec(), NAMESPACE));
+        assertThrows(IllegalStateException.class, () -> reconciler.secretData(kafkaAccess.getSpec(), NAMESPACE));
     }
 }

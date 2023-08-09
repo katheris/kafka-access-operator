@@ -91,14 +91,7 @@ public class KafkaAccessReconcilerTest {
         final KafkaReference kafkaReference = ResourceProvider.getKafkaReference(KAFKA_NAME, KAFKA_NAMESPACE);
         final KafkaAccess kafkaAccess = ResourceProvider.getKafkaAccess(NAME, NAMESPACE, kafkaReference);
 
-        client.resources(KafkaAccess.class).resource(kafkaAccess).create();
-        client.resources(KafkaAccess.class).inNamespace(NAMESPACE).withName(NAME).waitUntilCondition(updatedKafkaAccess -> {
-            final Optional<String> bindingName = Optional.ofNullable(updatedKafkaAccess)
-                    .map(KafkaAccess::getStatus)
-                    .map(KafkaAccessStatus::getBinding)
-                    .map(BindingStatus::getName);
-            return bindingName.isPresent() && NAME.equals(bindingName.get());
-        }, TEST_TIMEOUT, TimeUnit.MILLISECONDS);
+        createKafkaAccess(client, kafkaAccess, NAME, NAMESPACE);
 
         String uid = Optional.ofNullable(client.resources(KafkaAccess.class).inNamespace(NAMESPACE).withName(NAME).get())
                 .map(KafkaAccess::getMetadata)
@@ -155,14 +148,7 @@ public class KafkaAccessReconcilerTest {
         final KafkaUserReference kafkaUserReference = ResourceProvider.getKafkaUserReference(KAFKA_NAME, KAFKA_NAMESPACE);
         final KafkaAccess kafkaAccess = ResourceProvider.getKafkaAccess(NAME, NAMESPACE, kafkaReference, kafkaUserReference);
 
-        client.resources(KafkaAccess.class).resource(kafkaAccess).create();
-        client.resources(KafkaAccess.class).inNamespace(NAMESPACE).withName(NAME).waitUntilCondition(updatedKafkaAccess -> {
-            final Optional<String> bindingName = Optional.ofNullable(updatedKafkaAccess)
-                    .map(KafkaAccess::getStatus)
-                    .map(KafkaAccessStatus::getBinding)
-                    .map(BindingStatus::getName);
-            return bindingName.isPresent() && NAME.equals(bindingName.get());
-        }, TEST_TIMEOUT, TimeUnit.MILLISECONDS);
+        createKafkaAccess(client, kafkaAccess, NAME, NAMESPACE);
 
         final Secret secret = client.secrets().inNamespace(NAMESPACE).withName(NAME).get();
         assertThat(secret).isNotNull();
@@ -214,14 +200,7 @@ public class KafkaAccessReconcilerTest {
         final KafkaUserReference kafkaUserReference = ResourceProvider.getKafkaUserReference(KAFKA_USER_NAME, KAFKA_NAMESPACE);
         final KafkaAccess kafkaAccess = ResourceProvider.getKafkaAccess(NAME, NAMESPACE, kafkaReference, kafkaUserReference);
 
-        client.resources(KafkaAccess.class).resource(kafkaAccess).create();
-        client.resources(KafkaAccess.class).inNamespace(NAMESPACE).withName(NAME).waitUntilCondition(updatedKafkaAccess -> {
-            final Optional<String> bindingName = Optional.ofNullable(updatedKafkaAccess)
-                    .map(KafkaAccess::getStatus)
-                    .map(KafkaAccessStatus::getBinding)
-                    .map(BindingStatus::getName);
-            return bindingName.isPresent() && NAME.equals(bindingName.get());
-        }, TEST_TIMEOUT, TimeUnit.MILLISECONDS);
+        createKafkaAccess(client, kafkaAccess, NAME, NAMESPACE);
 
         final Secret secret = client.secrets().inNamespace(NAMESPACE).withName(NAME).get();
         assertThat(secret).isNotNull();
@@ -256,20 +235,24 @@ public class KafkaAccessReconcilerTest {
         secret.setMetadata(new ObjectMetaBuilder(secret.getMetadata()).addToAnnotations(customAnnotation).build());
         client.secrets().inNamespace(NAMESPACE).resource(secret).create();
 
-        client.resources(KafkaAccess.class).resource(kafkaAccess).create();
-        client.resources(KafkaAccess.class).inNamespace(NAMESPACE).withName(NAME).waitUntilCondition(updatedKafkaAccess -> {
-            final Optional<String> bindingName = Optional.ofNullable(updatedKafkaAccess)
-                    .map(KafkaAccess::getStatus)
-                    .map(KafkaAccessStatus::getBinding)
-                    .map(BindingStatus::getName);
-            return bindingName.isPresent() && NAME.equals(bindingName.get());
-        }, TEST_TIMEOUT, TimeUnit.MILLISECONDS);
+        createKafkaAccess(client, kafkaAccess, NAME, NAMESPACE);
 
         final Secret updatedSecret = client.secrets().inNamespace(NAMESPACE).withName(NAME).get();
         final Base64.Encoder encoder = Base64.getEncoder();
         assertThat(updatedSecret.getData()).contains(entry("type", encoder.encodeToString("kafka".getBytes(StandardCharsets.UTF_8))),
                 entry("provider", encoder.encodeToString("strimzi".getBytes(StandardCharsets.UTF_8))));
         assertThat(updatedSecret.getMetadata().getAnnotations()).containsAllEntriesOf(customAnnotation);
+    }
+
+    public static void createKafkaAccess(final KubernetesClient client, final KafkaAccess kafkaAccess, final String name, final String namespace) {
+        client.resources(KafkaAccess.class).resource(kafkaAccess).create();
+        client.resources(KafkaAccess.class).inNamespace(namespace).withName(name).waitUntilCondition(updatedKafkaAccess -> {
+            final Optional<String> bindingName = Optional.ofNullable(updatedKafkaAccess)
+                    .map(KafkaAccess::getStatus)
+                    .map(KafkaAccessStatus::getBinding)
+                    .map(BindingStatus::getName);
+            return bindingName.isPresent() && name.equals(bindingName.get());
+        }, TEST_TIMEOUT, TimeUnit.MILLISECONDS);
     }
 
 }

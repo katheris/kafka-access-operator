@@ -15,9 +15,9 @@ import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceInitializer;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
+import io.javaoperatorsdk.operator.processing.event.ResourceID;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
-import io.strimzi.api.kafka.Crds;
 import io.strimzi.api.kafka.model.Kafka;
 import io.strimzi.api.kafka.model.KafkaUser;
 import io.strimzi.api.kafka.model.KafkaUserAuthentication;
@@ -41,6 +41,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 /**
@@ -62,6 +63,9 @@ public class KafkaAccessReconciler implements Reconciler<KafkaAccess>, EventSour
     private final Map<String, String> commonSecretLabels = new HashMap<>();
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaAccessOperator.class);
+
+    private InformerEventSource<Kafka, KafkaAccess> kafkaEventSource;
+    private InformerEventSource<KafkaUser, KafkaAccess> kafkaUserEventSource;
 
     /**
      * @param kubernetesClient      The Kubernetes client
@@ -197,12 +201,12 @@ public class KafkaAccessReconciler implements Reconciler<KafkaAccess>, EventSour
     @Override
     public Map<String, EventSource> prepareEventSources(final EventSourceContext<KafkaAccess> context) {
         LOGGER.info("Preparing event sources");
-        InformerEventSource<Kafka, KafkaAccess> kafkaEventSource = new InformerEventSource<>(
+        kafkaEventSource = new InformerEventSource<>(
                 InformerConfiguration.from(Kafka.class, context)
                         .withSecondaryToPrimaryMapper(kafka -> KafkaAccessParser.kafkaSecondaryToPrimaryMapper(context.getPrimaryCache().list(), kafka))
                         .build(),
                 context);
-        InformerEventSource<KafkaUser, KafkaAccess> kafkaUserEventSource = new InformerEventSource<>(
+        kafkaUserEventSource = new InformerEventSource<>(
                 InformerConfiguration.from(KafkaUser.class, context)
                         .withSecondaryToPrimaryMapper(kafkaUser -> KafkaAccessParser.kafkaUserSecondaryToPrimaryMapper(context.getPrimaryCache().list(), kafkaUser))
                         .withPrimaryToSecondaryMapper(kafkaAccess -> KafkaAccessParser.kafkaUserPrimaryToSecondaryMapper((KafkaAccess) kafkaAccess))
@@ -233,16 +237,20 @@ public class KafkaAccessReconciler implements Reconciler<KafkaAccess>, EventSour
     }
 
     private Kafka getKafka(final String clusterName, final String namespace) {
-        return Crds.kafkaOperation(kubernetesClient)
-                .inNamespace(namespace)
-                .withName(clusterName)
-                .get();
+        return kafkaEventSource.get(new ResourceID(clusterName, namespace))
+                .orElseThrow(() -> new NoSuchElementException(String.format("Missing Kafka %s/%s%n", clusterName, namespace)));
+//        return Crds.kafkaOperation(kubernetesClient)
+//                .inNamespace(namespace)
+//                .withName(clusterName)
+//                .get();
     }
 
     private KafkaUser getKafkaUser(final String name, final String namespace) {
-        return Crds.kafkaUserOperation(kubernetesClient)
-                .inNamespace(namespace)
-                .withName(name)
-                .get();
+        return kafkaUserEventSource.get(new ResourceID(name, namespace))
+                .orElseThrow(() -> new NoSuchElementException(String.format("Missing KafkaUser %s/%s%n", name, namespace)));
+//        return Crds.kafkaUserOperation(kubernetesClient)
+//                .inNamespace(namespace)
+//                .withName(name)
+//                .get();
     }
 }
