@@ -4,6 +4,7 @@
  */
 package io.strimzi.kafka.access;
 
+import io.fabric8.kubernetes.api.model.EventSourceBuilder;
 import io.fabric8.kubernetes.api.model.OwnerReferenceBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
@@ -15,6 +16,9 @@ import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceInitializer;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
+import io.javaoperatorsdk.operator.api.reconciler.dependent.Dependent;
+import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependentResource;
+import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependentResourceConfig;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
 import io.strimzi.api.kafka.Crds;
@@ -47,7 +51,8 @@ import java.util.Optional;
  * The custom reconciler of Strimzi Access Operator
  */
 @SuppressWarnings("ClassFanOutComplexity")
-@ControllerConfiguration
+@ControllerConfiguration(dependents = {@Dependent(type = SecretDependentResource.class)})
+//@ControllerConfiguration
 public class KafkaAccessReconciler implements Reconciler<KafkaAccess>, EventSourceInitializer<KafkaAccess> {
 
     private static final String TYPE_SECRET_KEY = "type";
@@ -62,12 +67,17 @@ public class KafkaAccessReconciler implements Reconciler<KafkaAccess>, EventSour
     private final Map<String, String> commonSecretLabels = new HashMap<>();
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaAccessOperator.class);
+//    private KubernetesDependentResource<Secret, KafkaAccess> secretDR;
 
     /**
      * @param kubernetesClient      The Kubernetes client
      */
     public KafkaAccessReconciler(final KubernetesClient kubernetesClient) {
         this.kubernetesClient = kubernetesClient;
+//        this.secretDR = new SecretDependentResource();
+//        secretDR.setKubernetesClient(kubernetesClient);
+//        secretDR.configureWith(new KubernetesDependentResourceConfig<Secret>().setLabelSelector(KafkaAccessParser.MANAGED_BY_LABEL_KEY + "=" + KafkaAccessParser.KAFKA_ACCESS_LABEL_VALUE));
+//        secretDR.useEventSourceWithName(ACCESS_SECRET_EVENT_SOURCE);
         final Base64.Encoder encoder = Base64.getEncoder();
         commonSecretData.put(TYPE_SECRET_KEY, encoder.encodeToString(TYPE_SECRET_VALUE.getBytes(StandardCharsets.UTF_8)));
         commonSecretData.put(PROVIDER_SECRET_KEY, encoder.encodeToString(PROVIDER_SECRET_VALUE.getBytes(StandardCharsets.UTF_8)));
@@ -88,22 +98,27 @@ public class KafkaAccessReconciler implements Reconciler<KafkaAccess>, EventSour
         final String kafkaAccessNamespace = kafkaAccess.getMetadata().getNamespace();
         LOGGER.info("Reconciling KafkaAccess {}/{}", kafkaAccessNamespace, kafkaAccessName);
 
-        final Map<String, String> data  = secretData(kafkaAccess.getSpec(), kafkaAccessNamespace);
-        createOrUpdateSecret(context, data, kafkaAccess);
-
-        final boolean bindingStatusCorrect = Optional.ofNullable(kafkaAccess.getStatus())
-                .map(KafkaAccessStatus::getBinding)
-                .map(BindingStatus::getName)
-                .map(kafkaAccessName::equals)
-                .orElse(false);
-        if (!bindingStatusCorrect) {
-            final KafkaAccessStatus status = new KafkaAccessStatus();
-            status.setBinding(new BindingStatus(kafkaAccessName));
-            kafkaAccess.setStatus(status);
-            return UpdateControl.updateStatus(kafkaAccess);
-        } else {
-            return UpdateControl.noUpdate();
-        }
+//        final Map<String, String> data  = secretData(kafkaAccess.getSpec(), kafkaAccessNamespace);
+//        createOrUpdateSecret(context, data, kafkaAccess);
+//
+//        final boolean bindingStatusCorrect = Optional.ofNullable(kafkaAccess.getStatus())
+//                .map(KafkaAccessStatus::getBinding)
+//                .map(BindingStatus::getName)
+//                .map(kafkaAccessName::equals)
+//                .orElse(false);
+//        if (!bindingStatusCorrect) {
+//            final KafkaAccessStatus status = new KafkaAccessStatus();
+//            status.setBinding(new BindingStatus(kafkaAccessName));
+//            kafkaAccess.setStatus(status);
+//            return UpdateControl.updateStatus(kafkaAccess);
+//        } else {
+//            return UpdateControl.noUpdate();
+//        }
+//        secretDR.reconcile(kafkaAccess, context);
+        final KafkaAccessStatus status = new KafkaAccessStatus();
+        status.setBinding(new BindingStatus(kafkaAccessName));
+        kafkaAccess.setStatus(status);
+        return UpdateControl.patchStatus(kafkaAccess);
     }
 
     protected Map<String, String> secretData(final KafkaAccessSpec spec, final String kafkaAccessNamespace) {
@@ -226,8 +241,9 @@ public class KafkaAccessReconciler implements Reconciler<KafkaAccess>, EventSour
                         .withSecondaryToPrimaryMapper(secret -> KafkaAccessParser.secretSecondaryToPrimaryMapper(context.getPrimaryCache().list(), secret))
                         .build(),
                 context);
-        Map<String, EventSource> eventSources = EventSourceInitializer.nameEventSources(kafkaEventSource, kafkaUserEventSource, strimziSecretEventSource, strimziKafkaUserSecretEventSource);
-        eventSources.put(ACCESS_SECRET_EVENT_SOURCE, kafkaAccessSecretEventSource);
+//        secretDR.configureWith(kafkaAccessSecretEventSource);
+        Map<String, EventSource> eventSources = EventSourceInitializer.nameEventSources(kafkaEventSource, kafkaUserEventSource, strimziSecretEventSource, strimziKafkaUserSecretEventSource, kafkaAccessSecretEventSource);
+//        eventSources.put(ACCESS_SECRET_EVENT_SOURCE, kafkaAccessSecretEventSource);
         LOGGER.info("Finished preparing event sources");
         return eventSources;
     }
